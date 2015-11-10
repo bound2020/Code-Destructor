@@ -6,13 +6,13 @@
 
 struct TreeNode
 {
-    TreeNode() : idx(0), feature(-1), threshold(0), gamma(0) {} 
+    TreeNode() : idx(0), feature(-1), threshold(0), gamma(0) {}
     uint32_t idx;
     int32_t feature;
     float threshold, gamma;
 };
 
-class CART 
+class CART
 {
 public:
     CART() : tnodes(max_tnodes)
@@ -20,7 +20,8 @@ public:
         for(uint32_t i = 1; i <= max_tnodes; ++i)
             tnodes[i].idx = i;
     }
-    void fit(Problem const &prob, std::vector<float> const &R, 
+    //R为残差，F1为function
+    void fit(Problem const &prob, std::vector<float> const &R,
         std::vector<float> &F1);
     std::pair<uint32_t, float> predict(float const * const x) const;
 
@@ -32,6 +33,7 @@ private:
     std::vector<TreeNode> tnodes;
 };
 
+//以CART作为boosting tree
 class GBDT
 {
 public:

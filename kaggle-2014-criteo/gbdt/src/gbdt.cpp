@@ -6,9 +6,15 @@
 
 #include "gbdt.h"
 #include "timer.h"
+/*
+    本代码实现的是论文Greedy Function Approximation: A Gradient Boosting Machine
+    Algorithm 5, l2_treeboost,
+    所有计算公式均参考
 
+*/
 namespace {
 
+//计算bias，公式在17行
 float calc_bias(std::vector<float> const &Y)
 {
     double y_bar = std::accumulate(Y.begin(), Y.end(), 0.0);
@@ -16,6 +22,8 @@ float calc_bias(std::vector<float> const &Y)
     return static_cast<float>(log((1.0+y_bar)/(1.0-y_bar)));
 }
 
+//为每条样本记录树中的位置，以及残差，是否收缩
+//shrinkage作用：不完全信任每一棵树，累加的时候以一定的权重只累加一部分
 struct Location
 {
     Location() : tnode_idx(1), r(0), shrinked(false) {}
@@ -31,20 +39,20 @@ struct Meta
     uint32_t nl, n;
     float v;
 };
-
+//应该是分裂出的节点，ese是分裂值
 struct Defender
 {
     Defender() : ese(0), threshold(0) {}
     double ese;
     float threshold;
 };
-
+//nr_field字段数，nr_instance样本数
 void scan(
     Problem const &prob,
     std::vector<Location> const &locations,
     std::vector<Meta> const &metas0,
     std::vector<Defender> &defenders,
-    uint32_t const offset,
+    uint32_t const offset,first
     bool const forward)
 {
     uint32_t const nr_field = prob.nr_field;
@@ -64,6 +72,7 @@ void scan(
             if(location.shrinked)
                 continue;
 
+            //
             uint32_t const f = location.tnode_idx-offset;
             Meta &meta = metas[f];
 
@@ -71,8 +80,8 @@ void scan(
             {
                 double const sr = meta.s - meta.sl;
                 uint32_t const nr = meta.n - meta.nl;
-                double const current_ese = 
-                    (meta.sl*meta.sl)/static_cast<double>(meta.nl) + 
+                double const current_ese =
+                    (meta.sl*meta.sl)/static_cast<double>(meta.nl) +
                     (sr*sr)/static_cast<double>(nr);
 
                 Defender &defender = defenders[f*nr_field+j];
@@ -123,11 +132,11 @@ void scan_sparse(
             Meta const &meta = metas[f];
             if(meta.nl == 0)
                 continue;
-            
+
             double const sr = meta.s - meta.sl;
             uint32_t const nr = meta.n - meta.nl;
-            double const current_ese = 
-                (meta.sl*meta.sl)/static_cast<double>(meta.nl) + 
+            double const current_ese =
+                (meta.sl*meta.sl)/static_cast<double>(meta.nl) +
                 (sr*sr)/static_cast<double>(nr);
 
             Defender &defender = defenders[f*nr_sparse_field+j];
@@ -148,19 +157,23 @@ uint32_t CART::max_tnodes = static_cast<uint32_t>(pow(2, CART::max_depth+1));
 std::mutex CART::mtx;
 bool CART::verbose = false;
 
-void CART::fit(Problem const &prob, std::vector<float> const &R, 
+void CART::fit(Problem const &prob, std::vector<float> const &R,
     std::vector<float> &F1)
 {
     uint32_t const nr_field = prob.nr_field;
     uint32_t const nr_sparse_field = prob.nr_sparse_field;
     uint32_t const nr_instance = prob.nr_instance;
 
+    //记录样本的位置
     std::vector<Location> locations(nr_instance);
     #pragma omp parallel for schedule(static)
+    //初始化残差
     for(uint32_t i = 0; i < nr_instance; ++i)
         locations[i].r = R[i];
+    //按层遍历
     for(uint32_t d = 0, offset = 1; d < max_depth; ++d, offset *= 2)
     {
+        //每层的节点数为2^d
         uint32_t const nr_leaf = static_cast<uint32_t>(pow(2, d));
         std::vector<Meta> metas0(nr_leaf);
 
@@ -169,12 +182,14 @@ void CART::fit(Problem const &prob, std::vector<float> const &R,
             Location &location = locations[i];
             if(location.shrinked)
                 continue;
-
+            //每个节点距离本层首节点的偏移
             Meta &meta = metas0[location.tnode_idx-offset];
+            //累加残差，为后面的计算公式做准备
             meta.s += location.r;
             ++meta.n;
         }
 
+        //每层节点数*字段数
         std::vector<Defender> defenders(nr_leaf*nr_field);
         std::vector<Defender> defenders_sparse(nr_leaf*nr_sparse_field);
         for(uint32_t f = 0; f < nr_leaf; ++f)
@@ -196,11 +211,13 @@ void CART::fit(Problem const &prob, std::vector<float> const &R,
         thread_f.join();
         thread_b.join();
 
+        //对每个节点计算
         for(uint32_t f = 0; f < nr_leaf; ++f)
         {
             Meta const &meta = metas0[f];
             double best_ese = meta.s*meta.s/static_cast<double>(meta.n);
             TreeNode &tnode = tnodes[f+offset];
+            //计算每个字段的最佳分裂属性和分裂值
             for(uint32_t j = 0; j < nr_field; ++j)
             {
                 Defender defender = defenders[f*nr_field+j];
@@ -230,7 +247,7 @@ void CART::fit(Problem const &prob, std::vector<float> const &R,
                 }
             }
         }
-
+        //将样本分配到节点中
         #pragma omp parallel for schedule(static)
         for(uint32_t i = 0; i < nr_instance; ++i)
         {
@@ -240,23 +257,26 @@ void CART::fit(Problem const &prob, std::vector<float> const &R,
 
             uint32_t &tnode_idx = location.tnode_idx;
             TreeNode &tnode = tnodes[tnode_idx];
+            //已到叶子节点
             if(tnode.feature == -1)
             {
                 location.shrinked = true;
             }
+            //分到左或右节点，结果直接保存到location中
             else if(static_cast<uint32_t>(tnode.feature) < nr_field)
             {
                 if(prob.Z[tnode.feature][i].v < tnode.threshold)
-                    tnode_idx = 2*tnode_idx; 
+                    tnode_idx = 2*tnode_idx;
                 else
-                    tnode_idx = 2*tnode_idx+1; 
+                    tnode_idx = 2*tnode_idx+1;
             }
+            //稀疏字段
             else
             {
-                uint32_t const target_feature 
+                uint32_t const target_feature
                     = static_cast<uint32_t>(tnode.feature-nr_field);
                 bool is_one = false;
-                for(uint64_t p = prob.SJP[i]; p < prob.SJP[i+1]; ++p) 
+                for(uint64_t p = prob.SJP[i]; p < prob.SJP[i+1]; ++p)
                 {
                     if(prob.SJ[p] == target_feature)
                     {
@@ -265,15 +285,18 @@ void CART::fit(Problem const &prob, std::vector<float> const &R,
                     }
                 }
                 if(!is_one)
-                    tnode_idx = 2*tnode_idx; 
+                    tnode_idx = 2*tnode_idx;
                 else
-                    tnode_idx = 2*tnode_idx+1; 
+                    tnode_idx = 2*tnode_idx+1;
             }
         }
     }
 
-    std::vector<std::pair<double, double>> 
+    std::vector<std::pair<double, double>>
         tmp(max_tnodes, std::make_pair(0, 0));
+
+    //first是残差
+    //second为计算gamma做准备
     for(uint32_t i = 0; i < nr_instance; ++i)
     {
         float const r = locations[i].r;
@@ -282,9 +305,11 @@ void CART::fit(Problem const &prob, std::vector<float> const &R,
         tmp[tnode_idx].second += fabs(r)*(1-fabs(r));
     }
 
+    //计算gamma
     for(uint32_t tnode_idx = 1; tnode_idx <= max_tnodes; ++tnode_idx)
     {
         double a, b;
+        //first -> a, second -> b
         std::tie(a, b) = tmp[tnode_idx];
         tnodes[tnode_idx].gamma = (b <= 1e-12)? 0 : static_cast<float>(a/b);
     }
@@ -293,7 +318,7 @@ void CART::fit(Problem const &prob, std::vector<float> const &R,
     for(uint32_t i = 0; i < nr_instance; ++i)
         F1[i] = tnodes[locations[i].tnode_idx].gamma;
 }
-
+//预测样本，并分到左右节点
 std::pair<uint32_t, float> CART::predict(float const * const x) const
 {
     uint32_t tnode_idx = 1;
@@ -328,14 +353,17 @@ void GBDT::fit(Problem const &Tr, Problem const &Va)
         std::vector<float> R(Tr.nr_instance), F1(Tr.nr_instance);
 
         #pragma omp parallel for schedule(static)
-        for(uint32_t i = 0; i < Tr.nr_instance; ++i) 
+        //初始化残差，计算公式参考论文
+        for(uint32_t i = 0; i < Tr.nr_instance; ++i)
             R[i] = static_cast<float>(Y[i]/(1+exp(Y[i]*F_Tr[i])));
 
         trees[t].fit(Tr, R, F1);
 
         double Tr_loss = 0;
         #pragma omp parallel for schedule(static) reduction(+: Tr_loss)
-        for(uint32_t i = 0; i < Tr.nr_instance; ++i) 
+        //log loss
+        //Y为真实值，f_tr为训练值
+        for(uint32_t i = 0; i < Tr.nr_instance; ++i)
         {
             F_Tr[i] += F1[i];
             Tr_loss += log(1+exp(-Y[i]*F_Tr[i]));
@@ -351,7 +379,8 @@ void GBDT::fit(Problem const &Tr, Problem const &Va)
 
         double Va_loss = 0;
         #pragma omp parallel for schedule(static) reduction(+: Va_loss)
-        for(uint32_t i = 0; i < Va.nr_instance; ++i) 
+        //validation误差
+        for(uint32_t i = 0; i < Va.nr_instance; ++i)
             Va_loss += log(1+exp(-Va.Y[i]*F_Va[i]));
         Va_loss /= static_cast<double>(Va.nr_instance);
 
@@ -368,6 +397,7 @@ float GBDT::predict(float const * const x) const
     return s;
 }
 
+//获得索引
 std::vector<uint32_t> GBDT::get_indices(float const * const x) const
 {
     uint32_t const nr_tree = static_cast<uint32_t>(trees.size());

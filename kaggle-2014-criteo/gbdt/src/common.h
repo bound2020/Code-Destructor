@@ -12,6 +12,7 @@
 
 #include <pmmintrin.h>
 
+//树的节点，i为index， v为value
 struct Node
 {
     Node() : i(0), v(0) {}
@@ -20,26 +21,28 @@ struct Node
     float v;
 };
 
+//输入样本： 样本数，字段数，稀疏字段数
 struct Problem
 {
     Problem() : nr_instance(0), nr_field(0), nr_sparse_field(0) {}
-    Problem(uint32_t const nr_instance, uint32_t const nr_field) 
+    Problem(uint32_t const nr_instance, uint32_t const nr_field)
         : nr_instance(nr_instance), nr_field(nr_field), nr_sparse_field(0),
-          X(nr_field, std::vector<Node>(nr_instance)), 
-          Z(nr_field, std::vector<Node>(nr_instance)), 
+          X(nr_field, std::vector<Node>(nr_instance)),
+          Z(nr_field, std::vector<Node>(nr_instance)),
           Y(nr_instance) {}
     uint32_t const nr_instance, nr_field;
     uint32_t nr_sparse_field;
     std::vector<std::vector<Node>> X, Z;
+    //SI存放稀疏数据，SJ存放稀疏数据下标
     std::vector<uint32_t> SI, SJ;
     std::vector<uint64_t> SIP, SJP;
     std::vector<float> Y;
 };
 
-inline std::vector<float> 
+inline std::vector<float>
 construct_instance(Problem const &prob, uint32_t const i)
 {
-    uint32_t const nr_field = prob.nr_field; 
+    uint32_t const nr_field = prob.nr_field;
     uint32_t const nr_sparse_field = prob.nr_sparse_field;
     std::vector<uint32_t> const &SJ = prob.SJ;
     std::vector<uint64_t> const &SJP = prob.SJP;
@@ -53,12 +56,12 @@ construct_instance(Problem const &prob, uint32_t const i)
     return x;
 }
 
-Problem read_data(std::string const &dense_path, 
+Problem read_data(std::string const &dense_path,
     std::string const &sparse_path);
 
 FILE *open_c_file(std::string const &path, std::string const &mode);
 
-std::vector<std::string> 
+std::vector<std::string>
 argv_to_args(int const argc, char const * const * const argv);
 
 #endif // _COMMON_H_

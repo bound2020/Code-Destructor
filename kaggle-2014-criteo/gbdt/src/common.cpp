@@ -16,6 +16,11 @@ uint32_t get_nr_line(std::string const &path)
     char line[kMaxLineSize];
 
     uint32_t nr_line = 0;
+    /*
+    char *fgets(char *buf, int bufsize, FILE *stream):从文件结构体指针stream中读取数据，每次读取一行。
+        读取的数据保存在buf指向的字符数组中，每次最多读取bufsize-1个字符（第bufsize个字符赋'\0'），
+        如果文件中的该行不足bufsize个字符，则读完该行就结束。
+    */
     while(fgets(line, kMaxLineSize, f) != nullptr)
         ++nr_line;
 
@@ -24,12 +29,17 @@ uint32_t get_nr_line(std::string const &path)
     return nr_line;
 }
 
+//获取字段个数
 uint32_t get_nr_field(std::string const &path)
 {
     FILE *f = open_c_file(path.c_str(), "r");
     char line[kMaxLineSize];
 
     fgets(line, kMaxLineSize, f);
+
+    /*
+    char *strtok(char s[], const char *delim): 分解字符串为一组字符串。s为要分解的字符串，delim为分隔符字符串。
+    */
     strtok(line, " \t");
 
     uint32_t nr_field = 0;
@@ -46,6 +56,8 @@ uint32_t get_nr_field(std::string const &path)
     return nr_field;
 }
 
+//读取稠密数据
+//不清楚为何需要分开读取
 void read_dense(Problem &prob, std::string const &path)
 {
     char line[kMaxLineSize];
@@ -97,12 +109,13 @@ void read_sparse(Problem &prob, std::string const &path)
 
     std::vector<std::vector<uint32_t>> buffer;
 
-    uint64_t nnz = 0; 
+    uint64_t nnz = 0;
     uint32_t nr_instance = 0;
     prob.SJP.push_back(0);
     for(; fgets(line, kMaxLineSize, f) != nullptr; ++nr_instance)
     {
         strtok(line, " \t");
+        //无法确定字段数，只能以换行符判断？
         for( ; ; ++nnz)
         {
             char *idx_char = strtok(nullptr," \t");
@@ -117,6 +130,7 @@ void read_sparse(Problem &prob, std::string const &path)
         }
         prob.SJP.push_back(prob.SJ.size());
     }
+    //C++11专用函数shrink_to_fit,用它来释放vector和deque容器中的内存
     prob.SJ.shrink_to_fit();
     prob.SJP.shrink_to_fit();
 
@@ -128,7 +142,8 @@ void read_sparse(Problem &prob, std::string const &path)
     uint64_t p = 0;
     for(uint32_t j = 0; j < prob.nr_sparse_field; ++j)
     {
-        for(auto i : buffer[j]) 
+    //C++11标准的语法中，auto被定义为自动推断变量的类型
+        for(auto i : buffer[j])
             prob.SI[p++] = i;
         prob.SIP[j+1] = p;
     }
@@ -159,7 +174,7 @@ FILE *open_c_file(std::string const &path, std::string const &mode)
     return f;
 }
 
-std::vector<std::string> 
+std::vector<std::string>
 argv_to_args(int const argc, char const * const * const argv)
 {
     std::vector<std::string> args;
