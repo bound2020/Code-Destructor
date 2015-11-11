@@ -46,7 +46,7 @@ struct Defender
     double ese;
     float threshold;
 };
-//nr_field字段数，nr_instance样本数
+
 void scan(
     Problem const &prob,
     std::vector<Location> const &locations,
@@ -54,7 +54,7 @@ void scan(
     std::vector<Defender> &defenders,
     uint32_t const offset,first
     bool const forward)
-{
+{   //nr_field字段数，nr_instance样本数
     uint32_t const nr_field = prob.nr_field;
     uint32_t const nr_instance = prob.nr_instance;
 
@@ -80,6 +80,7 @@ void scan(
             {
                 double const sr = meta.s - meta.sl;
                 uint32_t const nr = meta.n - meta.nl;
+                //当前节点误差=左子树均方误差+右子树均方误差
                 double const current_ese =
                     (meta.sl*meta.sl)/static_cast<double>(meta.nl) +
                     (sr*sr)/static_cast<double>(nr);
