@@ -1,0 +1,131 @@
+OpenPR-LR V0.11
+
+Available at http://www.openpr.org.cn/
+
+Please read the LICENSE file before using OpenPR-LR.
+
+
+Table of Contents
+=================
+- Introduction
+- Installation
+- Data Format
+- Usage
+- Examples
+- Additional Information
+
+
+Introduction
+============
+OpenPR-LR is a C++ implementation of (multi-calss) Logistic Regression Model. 
+The maximual likelihood estimation (MLE) is used for parameter learning. MLE 
+equals learning under the cross-entropy (CE) criterion principle. For MLE, 
+(Stochastic) gradient descent optimation are used in OpenPR-LR.
+OpenPR-LR uses a sparse-data structure to represent the feature vector to seek 
+higher computational speed. Some other techniques such as online updating, 
+weights averaging, gaussian prior regularization are also supported.
+
+
+Installation
+============
+
+On Linux system, type `make' to build the `lr_train' and `lr_classify'
+programs. Run them without arguments to show the usages of them.
+
+On Windows system, refer to `Makefile' to build them, or use the pre-built
+binaries (in the directory `windows').
+
+
+Data Format
+===========
+
+The format of training and testing data file is:
+
+<label>	<index1>:<value1> <index2>:<value2> ...
+.
+.
+.
+
+Each line contains an instance and is ended by a '\n' character.
+
+<label> is an integer indicating the class id. The range of class id should be
+from 0 to the size of classes subtracting one. For example, the class id is 1,
+2, 3 and 4 for a 4-class classification problem.
+ 
+<label> and <index>:<value> are sperated by a '\t' character. <index> is a postive
+integer denoting the feature id. The range of feature id should be from 1 to the size
+of feature set. For example, the feature id is 1, 2, ... 9 or 10 if the dimension of
+feature set is 10. <value> is a float denoting the value of feature.
+
+If the feature value equals 0, the <index>:<value> is encourged to be neglected
+for the consideration of storage space and computational speed.
+
+Labels in the testing file are only used to calculate accuracy or errors. 
+If they are unknown, just fill the first column with any class labels.
+
+
+Usuage
+======
+
+The training module in OpenPR-LDF
+
+usage: lr_train [options] training_file model_file [pre_model_file]
+
+options: -h        -> help
+         -n int    -> maximal iteration loops (default 200)
+         -m double -> minimal loss value decrease (default 1e-03)
+         -l float  -> learning rate (default 1.0)
+         -r double -> regularization parameter lambda of gaussian prior (default 0)         
+         -a        -> 0: final weight (default)
+                   -> 1: average weights of all iteration loops
+         -u [0,1]  -> 0: initial training model (default)
+                   -> 1: updating model (pre_model_file is needed)
+
+
+The classification module in OpenPR-LDF
+
+usage: lr_classify [options] testing_file model_file output_file
+
+options: -h        -> help
+         -f [0..2] -> 0: only output class label (default)
+                   -> 1: output class label with log-likelihood (weighted sum)
+                   -> 2: output class label with soft probability
+
+
+Examples
+========
+
+The "data" directory contains a dataset of text classification task. This dataset 
+has six class labels and more than 250,000 features. 
+
+For training the liner classifier with CE criterion (maximal iteration loops 
+equals 50, minimal loss value decrease equals 1e-06, learning rate equals 1,and use the average weights):
+
+> lr_train -n 50 -m 1e-06 -a 1 data/train.samp data/ldf.mod
+
+For online-updating the previous model with new training data, you and use the 
+-u option and give the previous model file:
+
+> lr_train -u 1 data/new_train.samp data/ldf.mod data/pre_ldf.mod
+
+For classify testing file with only class label output:
+
+> lr_classify data/test.samp data/ldf.mod data/ldf.out
+
+For classify testing file with class label and log-likelihood (also known as 
+the weighted sum):
+
+> lr_classify -f 1 data/test.samp data/ldf.mod data/ldf_1.out
+
+For classify testing file with class label and soft probabilities (converted from
+log-likehood using sigmoid function):
+
+> lr_classify -f 2 data/test.samp data/ldf.mod example/ldf_2.out
+
+
+Additional Information
+======================
+
+For any questions and comments, please email to rxiacn@gmail.com.
+
+
