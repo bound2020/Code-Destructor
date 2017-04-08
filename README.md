@@ -1,3 +1,3 @@
-# Code-Deconstructor
-read and deconstruct code
+# Code-Destructor
+read and destruct code
 
